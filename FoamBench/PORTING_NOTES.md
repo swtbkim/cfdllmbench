@@ -7,7 +7,13 @@ prompts that name version-specific things, and the evaluation scripts to
 OpenFOAM ESI **v2412** (openfoam.com), the version that installs with one
 `apt` command on WSL2 / Ubuntu.
 
-- The original v10 datasets are kept unchanged under `Dataset/v10/`.
+- The original v10 datasets are kept unchanged under `Dataset/v10/`. The
+  benchmark design (how the Basic variants were derived from tutorials, the
+  hand-crafted Advanced cases, the four metrics) is described in the paper
+  (arXiv:2509.20374, sections 3.2 and 3.3) and the V2 summary at
+  https://nithinsomu.github.io/cfdllmbench_v2/; both report results obtained
+  with OpenFOAM v10, so scores measured on this v2412 port are not directly
+  comparable with the published numbers.
 - The port is produced by `tools/port_v10_to_v2412.py`; running it again on
   `Dataset/v10/` regenerates the v2412 JSON files byte for byte.
 - Human-readable pages for every case live under `Dataset/md/` and are

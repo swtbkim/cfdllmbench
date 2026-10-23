@@ -43,7 +43,7 @@ BANNER_RE = re.compile(r"\A\s*/\*-{10,}\*- C\+\+ -\*-{10,}\*\\\n.*?\n\\\*-{10,}\
 def replace_banner(text):
     """Replace a Foundation or old ESI banner by the v2412 banner, or prepend one."""
     if BANNER_RE.match(text):
-        return BANNER_RE.sub(ESI_BANNER, text, count=1)
+        return BANNER_RE.sub(lambda m: ESI_BANNER, text, count=1)
     return ESI_BANNER + text.lstrip("\n")
 
 
@@ -257,7 +257,7 @@ def combustion_thermo_file(text):
     def add_elements(m):
         name = m.group(1)
         elems = SPECIES_ELEMENTS.get(name)
-        if not elems:
+        if not elems or "elements" in body:
             return m.group(0)
         lines = "".join(f"        {e:<8}{n};\n" for e, n in elems.items())
         return m.group(0) + "    elements\n    {\n" + lines + "    }\n"
@@ -268,6 +268,9 @@ def combustion_thermo_file(text):
 def combustion_reactions_file(text, species):
     body = body_after_header(text)
     body = body.replace("irreversibleArrhenius;", "irreversibleArrheniusReaction;")
+    if re.search(r"\n\s*species\s*\(", "\n" + body) or not species:
+        # already in the ESI layout (species list inside the reactions file)
+        return replace_banner(foamfile("dictionary", "reactions", "constant")) + SEPARATOR + "\n" + body.lstrip("\n")
     elements = []
     for sp in species:
         for e in SPECIES_ELEMENTS.get(sp, {}):
@@ -295,11 +298,12 @@ def combustion_thermophysical_properties(text):
 
 def combustion_chemistry_properties(text):
     text = re.sub(r'\n\s*#include\s+"reactions"\s*\n', "\n", text)
-    text = re.sub(
-        r"(EulerImplicitCoeffs\s*\{\s*\n\s*cTauChem\s+[^;]+;\n)",
-        r"\g<1>    equilibriumRateLimiter off;\n",
-        text,
-    )
+    if "equilibriumRateLimiter" not in text:
+        text = re.sub(
+            r"(EulerImplicitCoeffs\s*\{\s*\n\s*cTauChem\s+[^;]+;\n)",
+            r"\g<1>    equilibriumRateLimiter off;\n",
+            text,
+        )
     text = text.replace("Rosenbrock43", "Rosenbrock34")
     return text
 
@@ -515,7 +519,8 @@ def convert_case(key, files, log):
     for path, text in files.items():
         if path == "usr_requirement":
             prompt = text
-            for old, new in PROMPT_RULES.get(fam, []):
+            rules = PROMPT_RULES.get(fam) or next((r for f, r in PROMPT_RULES.items() if fam.startswith(f + "_")), [])
+            for old, new in rules:
                 if old in prompt:
                     prompt = prompt.replace(old, new)
                     log.append(f"{key}: prompt '{old}' -> '{new}'")

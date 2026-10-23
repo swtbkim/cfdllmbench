@@ -365,6 +365,8 @@
  "Double_Square_SA: 0/nuTilda aligned with the prompt / standard SA wall condition",
  "wedge_SA: constant/momentumTransport -> constant/turbulenceProperties",
  "wedge_SA: constant/physicalProperties -> constant/thermophysicalProperties",
+ "Cylinder_LES: prompt 'use constant viscosity model with nu value of' -> 'use a Newtonian transport model with nu value of'",
+ "Cylinder_LES: prompt 'in physical properties' -> 'in transportProperties'",
  "Cylinder_LES: constant/momentumTransport -> constant/turbulenceProperties",
  "Cylinder_LES: constant/physicalProperties -> constant/transportProperties",
  "Diamond_Obstacle_KOMEGASST: deleted system/blockMeshDict1",
@@ -403,6 +405,8 @@
  "obliqueShock_KE: constant/momentumTransport -> constant/turbulenceProperties",
  "obliqueShock_KE: mu 0 -> 1.6646e-4 as the prompt states",
  "obliqueShock_KE: constant/physicalProperties -> constant/thermophysicalProperties",
+ "Cylinder_SA: prompt 'use constant viscosity model with nu value of' -> 'use a Newtonian transport model with nu value of'",
+ "Cylinder_SA: prompt 'in physical properties' -> 'in transportProperties'",
  "Cylinder_SA: 0/nuTilda aligned with the prompt / standard SA wall condition",
  "Cylinder_SA: constant/momentumTransport -> constant/turbulenceProperties",
  "Cylinder_SA: constant/physicalProperties -> constant/transportProperties"

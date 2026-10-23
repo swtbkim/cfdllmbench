@@ -9,7 +9,10 @@ matches the reference solution.
 The reference cases target **OpenFOAM v2412 (openfoam.com)**. They were
 ported from the OpenFOAM v10 (openfoam.org) cases used in the paper; see
 [PORTING_NOTES.md](PORTING_NOTES.md) for every change. The original v10
-datasets are kept in `Dataset/v10/`.
+datasets are kept in `Dataset/v10/`. Published results (paper and the
+[V2 page](https://nithinsomu.github.io/cfdllmbench_v2/)) were obtained with
+OpenFOAM v10 and are not directly comparable with scores measured on this
+port.
 
 ## Dataset
 
