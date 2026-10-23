@@ -1,103 +1,52 @@
-import os
+#!/usr/bin/env python3
+"""Execution metric (M_exec): did the framework-generated case run to completion?
+
+A case scores 1 when the solver log of the generated case (``log.<application>``
+as named in its system/controlDict, or any ``log.*Foam``) ends with OpenFOAM's
+final ``End`` line. The generated case is looked up in ``<case>/generated`` or,
+failing that, in the first sub-directory of the case that is not ``GT_Files``.
+
+    python3 execution_report.py            # -> results/basic_success_report.csv, results/advanced_success_report.csv
+"""
+
+import argparse
 import csv
-import pandas as pd
+import os
+import sys
 
-def analyze_basic_structure(base_dir):
-    dataset_path = os.path.join(base_dir, "Basic")
-    datasets = os.listdir(dataset_path)
-    results = []
-
-    for dataset in datasets:
-        dataset_dir = os.path.join(dataset_path, dataset)
-        if not os.path.isdir(dataset_dir):
-            continue
-
-        for i in range(1, 11):
-            case_dir = os.path.join(dataset_dir, str(i))
-            if not os.path.exists(case_dir):
-                continue
-
-            run_folders = [f for f in os.listdir(case_dir)
-                           if os.path.isdir(os.path.join(case_dir, f)) and f != "GT_Files"]
-            if not run_folders:
-                results.append([dataset, i, 0])
-                continue
-
-            run_path = os.path.join(case_dir, run_folders[0])
-            success = 0
-
-            for root, dirs, files in os.walk(run_path):
-                for dir_name in dirs:
-                    folder_path = os.path.join(root, dir_name)
-                    log_files = [f for f in os.listdir(folder_path) if f.startswith("log.") and f.endswith("Foam")]
-                    for log_file in log_files:
-                        log_path = os.path.join(folder_path, log_file)
-                        try:
-                            with open(log_path, "r") as file:
-                                lines = file.readlines()
-                                last_line = lines[-2].strip() if len(lines) > 1 else ""
-                                if last_line == "End":
-                                    success = 1
-                                    break
-                        except:
-                            continue
-                    if success:
-                        break
-                if success:
-                    break
-
-            results.append([dataset, i, success])
-    return results
+from foambench_common import DATASET_DIR, RESULTS_DIR, ensure_dirs, generated_dir, iter_cases, solver_log_success
 
 
-def analyze_advanced_structure(base_dir):
-    dataset_path = os.path.join(base_dir, "Advanced")
-    datasets = os.listdir(dataset_path)
-    results = []
+def analyze(dataset_dir, split):
+    rows = []
+    for _, dataset, directory, case_dir in iter_cases(dataset_dir, (split,)):
+        gen = generated_dir(case_dir)
+        success = 1 if gen and solver_log_success(gen) else 0
+        rows.append([dataset, directory, success])
+    return rows
 
-    for dataset in datasets:
-        case_dir = os.path.join(dataset_path, dataset)
-        if not os.path.isdir(case_dir):
-            continue
 
-        run_folders = [f for f in os.listdir(case_dir)
-                       if os.path.isdir(os.path.join(case_dir, f)) and f != "GT_Files"]
-        if not run_folders:
-            results.append([dataset, 1, 0])
-            continue
+def write_csv(path, rows):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["Dataset", "Directory", "Execution"])
+        w.writerows(rows)
 
-        run_path = os.path.join(case_dir, run_folders[0])
-        success = 0
 
-        for root, dirs, files in os.walk(run_path):
-            for dir_name in dirs:
-                folder_path = os.path.join(root, dir_name)
-                log_files = [f for f in os.listdir(folder_path) if f.startswith("log.") and f.endswith("Foam")]
-                for log_file in log_files:
-                    log_path = os.path.join(folder_path, log_file)
-                    try:
-                        with open(log_path, "r") as file:
-                            lines = file.readlines()
-                            last_line = lines[-2].strip() if len(lines) > 1 else ""
-                            if last_line == "End":
-                                success = 1
-                                break
-                    except:
-                        continue
-                if success:
-                    break
-            if success:
-                break
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--dataset", default=DATASET_DIR)
+    ap.add_argument("--results", default=RESULTS_DIR)
+    args = ap.parse_args()
+    ensure_dirs()
+    os.makedirs(args.results, exist_ok=True)
+    for split, name in (("Basic", "basic_success_report.csv"), ("Advanced", "advanced_success_report.csv")):
+        rows = analyze(args.dataset, split)
+        out = os.path.join(args.results, name)
+        write_csv(out, rows)
+        print(f"{split}: {sum(r[2] for r in rows)}/{len(rows)} executed -> {out}")
+    return 0
 
-        results.append([dataset, 1, success])
 
-    return results
-
-base_dir = "Dataset"
-basic_results = analyze_basic_structure(base_dir)
-advanced_results = analyze_advanced_structure(base_dir)
-
-pd.DataFrame(basic_results, columns=["Dataset", "Directory", "Success"]).to_csv("basic_success_report.csv", index=False)
-pd.DataFrame(advanced_results, columns=["Dataset", "Directory", "Success"]).to_csv("advanced_success_report.csv", index=False)
-
-print("✅ Reports saved: 'basic_success_report.csv' and 'advanced_success_report.csv'")
+if __name__ == "__main__":
+    sys.exit(main())

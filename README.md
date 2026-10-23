@@ -43,6 +43,7 @@ While LLMs excel in general NLP, their ability to reason about scientific system
 - 110 Basic + 16 Advanced OpenFOAM simulation tasks.
 - Benchmarks end-to-end tool use: case creation → execution → postprocessing.
 - Assesses multi-step reasoning, domain adaptation, and recovery.
+- Reference cases target OpenFOAM v2412 (openfoam.com); the OpenFOAM v10 cases of the paper are kept in `FoamBench/Dataset/v10/` (see [`FoamBench/PORTING_NOTES.md`](FoamBench/PORTING_NOTES.md)).
 
 ---
 
@@ -52,7 +53,7 @@ The latest (V2) datasets are in this repository:
 
 - **CFDQuery**: [`CFDQuery/CFDQuery.json`](CFDQuery/CFDQuery.json)
 - **CFDCodeBench**: [`CFDCodeBench/PDE_Benchmark/prompt/PDE_TASK_QUESTION_ONLY.json`](CFDCodeBench/PDE_Benchmark/prompt/PDE_TASK_QUESTION_ONLY.json) (task definitions) and [`CFDCodeBench/PDE_Benchmark/prompt/prompts.json`](CFDCodeBench/PDE_Benchmark/prompt/prompts.json) (prompts), with the reference solvers in [`CFDCodeBench/PDE_Benchmark/solution/`](CFDCodeBench/PDE_Benchmark/solution) and the reference answers in [`CFDCodeBench/PDE_Benchmark/results/solution/`](CFDCodeBench/PDE_Benchmark/results/solution)
-- **FoamBench**: [`FoamBench/Dataset/FoamBench_basic.json`](FoamBench/Dataset/FoamBench_basic.json) and [`FoamBench/Dataset/FoamBench_advanced.json`](FoamBench/Dataset/FoamBench_advanced.json)
+- **FoamBench**: [`FoamBench/Dataset/FoamBench_basic.json`](FoamBench/Dataset/FoamBench_basic.json) and [`FoamBench/Dataset/FoamBench_advanced.json`](FoamBench/Dataset/FoamBench_advanced.json) (OpenFOAM v2412); a readable page per case is under [`FoamBench/Dataset/md/`](FoamBench/Dataset/md/README.md); the OpenFOAM v10 originals are in [`FoamBench/Dataset/v10/`](FoamBench/Dataset/v10)
 
 The datasets used in the original paper are on Kaggle: [CFDQuery](https://www.kaggle.com/datasets/nithinsekhar/cfdquery/data), [CFDCodeBench](https://www.kaggle.com/datasets/nithinsekhar/cfdcodebench/data), [FoamBench](https://www.kaggle.com/datasets/nithinsekhar/foambench/data).
 

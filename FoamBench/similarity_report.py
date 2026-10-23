@@ -1,148 +1,125 @@
-import os
+#!/usr/bin/env python3
+"""Structural (M_struct) and file-content (M_file) similarity against the reference case.
+
+For each of the sub-directories 0/, constant/ and system/ of the reference case,
+every reference file is looked up at the same relative path in the generated
+case. The share of reference files that exist in the generated case is the
+tree score (M_struct); the mean ROUGE-L F-measure between the comment-stripped
+reference and generated file texts is the file score (M_file). Both are then
+averaged over the three sub-directories. Missing generated files score 0.
+
+    python3 similarity_report.py    # -> results/similarity_report_basic.csv, results/similarity_report_advanced.csv
+"""
+
+import argparse
 import csv
+import os
+import sys
+
 from rouge_score import rouge_scorer
 
-BASE_DIR = "Dataset"
+from foambench_common import DATASET_DIR, RESULTS_DIR, ensure_dirs, generated_dir, gt_dir, iter_cases
+
 SUBDIRS = ["0", "constant", "system"]
+SCORER = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
+
 
 def read_cleaned_code(path):
+    """File text without comment lines and without the banner before FoamFile."""
     try:
-        with open(path, "r") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
-    except:
+    except OSError:
         return ""
-
-    filtered_lines = [line for line in lines if not line.strip().startswith(("//", "/*", "*"))]
-    content_started = False
+    filtered = [ln for ln in lines if not ln.strip().startswith(("//", "/*", "*"))]
+    started = False
     cleaned = []
-    for line in filtered_lines:
-        if "FoamFile" in line or "{" in line:
-            content_started = True
-        if content_started:
-            cleaned.append(line)
+    for ln in filtered:
+        if "FoamFile" in ln or "{" in ln:
+            started = True
+        if started:
+            cleaned.append(ln)
     return "".join(cleaned)
 
-def get_all_files(base_path):
-    file_list = []
-    for root, _, files in os.walk(base_path):
-        for f in files:
-            if not f.startswith("log"):
-                full_path = os.path.join(root, f)
-                rel_path = os.path.relpath(full_path, base_path)
-                if "polyMesh" not in rel_path.replace("\\", "/"):
-                    file_list.append((rel_path, full_path))
-    return file_list
 
-def compute_rouge_score(gt_file, llm_file):
-    gt_code = read_cleaned_code(gt_file)
-    llm_code = read_cleaned_code(llm_file)
-    if not gt_code or not llm_code:
+def get_all_files(base_path):
+    files = {}
+    for root, _, names in os.walk(base_path):
+        for name in names:
+            if name.startswith("log"):
+                continue
+            full = os.path.join(root, name)
+            rel = os.path.relpath(full, base_path).replace("\\", "/")
+            if "polyMesh" in rel:
+                continue
+            files[rel] = full
+    return files
+
+
+def rouge_l(gt_file, gen_file):
+    gt = read_cleaned_code(gt_file)
+    gen = read_cleaned_code(gen_file)
+    if not gt or not gen:
         return 0.0
     try:
-        scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
-        score = scorer.score(gt_code, llm_code)
-        return score['rougeL'].fmeasure
-    except:
+        return SCORER.score(gt, gen)["rougeL"].fmeasure
+    except Exception:
         return 0.0
 
-def compare_dir_pair(gt_dir, llm_dir):
-    gt_files = get_all_files(gt_dir)
-    llm_files_dict = dict(get_all_files(llm_dir)) if os.path.exists(llm_dir) else {}
 
-    sim_scores = []
-    tree_matches = 0
-
-    for rel_path, gt_path in gt_files:
-        llm_path = llm_files_dict.get(rel_path)
-        if llm_path and os.path.exists(llm_path):
-            sim = compute_rouge_score(gt_path, llm_path)
-            sim_scores.append(sim)
-            tree_matches += 1
+def compare_dir_pair(gt_sub, gen_sub):
+    gt_files = get_all_files(gt_sub)
+    gen_files = get_all_files(gen_sub) if gen_sub and os.path.isdir(gen_sub) else {}
+    if not gt_files:
+        return 0.0, 0.0
+    sims, matches = [], 0
+    for rel, gt_path in gt_files.items():
+        gen_path = gen_files.get(rel)
+        if gen_path:
+            sims.append(rouge_l(gt_path, gen_path))
+            matches += 1
         else:
-            sim_scores.append(0.0)
+            sims.append(0.0)
+    return sum(sims) / len(gt_files), matches / len(gt_files)
 
-    total_gt_files = len(gt_files)
-    codebleu_score = sum(sim_scores) / total_gt_files if total_gt_files > 0 else 0.0
-    tree_score = tree_matches / total_gt_files if total_gt_files > 0 else 0.0
-    return codebleu_score, tree_score
 
-def process_basic():
-    output_file = "similarity_report_basic.csv"
-    with open(output_file, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["Dataset", "Directory", "CodeBLEU", "TreeScore"])
+def score_case(case_dir):
+    gt = gt_dir(case_dir)
+    gen = generated_dir(case_dir)
+    total_file, total_tree, count = 0.0, 0.0, 0
+    for sub in SUBDIRS:
+        gt_sub = os.path.join(gt, sub)
+        if not os.path.isdir(gt_sub):
+            continue
+        file_score, tree_score = compare_dir_pair(gt_sub, os.path.join(gen, sub) if gen else None)
+        total_file += file_score
+        total_tree += tree_score
+        count += 1
+    if count == 0:
+        return 0.0, 0.0
+    return round(total_file / count, 4), round(total_tree / count, 4)
 
-        basic_path = os.path.join(BASE_DIR, "Basic")
-        for dataset in os.listdir(basic_path):
-            for i in range(1, 11):
-                case_dir = os.path.join(basic_path, dataset, str(i))
-                gt_dir = os.path.join(case_dir, "GT_Files")
-                if not os.path.exists(gt_dir):
-                    continue
 
-                run_folders = [f for f in os.listdir(case_dir)
-                               if os.path.isdir(os.path.join(case_dir, f)) and f != "GT_Files"]
-                if not run_folders:
-                    continue
-                run_path = os.path.join(case_dir, run_folders[0])
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--dataset", default=DATASET_DIR)
+    ap.add_argument("--results", default=RESULTS_DIR)
+    args = ap.parse_args()
+    ensure_dirs()
+    os.makedirs(args.results, exist_ok=True)
+    for split, name in (("Basic", "similarity_report_basic.csv"), ("Advanced", "similarity_report_advanced.csv")):
+        out = os.path.join(args.results, name)
+        n = 0
+        with open(out, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["Dataset", "Directory", "RougeL", "TreeScore"])
+            for _, dataset, directory, case_dir in iter_cases(args.dataset, (split,)):
+                file_score, tree_score = score_case(case_dir)
+                w.writerow([dataset, directory, file_score, tree_score])
+                n += 1
+        print(f"{split}: {n} cases -> {out}")
+    return 0
 
-                total_rogue = 0
-                total_tree = 0
-                count = 0
-
-                for sub in SUBDIRS:
-                    gt_sub = os.path.join(gt_dir, sub)
-                    llm_sub = os.path.join(run_path, sub)
-                    if os.path.exists(gt_sub) and os.path.exists(llm_sub):
-                        rogue, tree = compare_dir_pair(gt_sub, llm_sub)
-                        total_rogue += rogue
-                        total_tree += tree
-                        count += 1
-
-                if count > 0:
-                    writer.writerow([dataset, i,
-                                     round(total_rogue / count, 4),
-                                     round(total_tree / count, 4)])
-
-def process_advanced():
-    output_file = "similarity_report_advanced.csv"
-    with open(output_file, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["Dataset", "Directory", "CodeBLEU", "TreeScore"])
-
-        adv_path = os.path.join(BASE_DIR, "Advanced")
-        for dataset in os.listdir(adv_path):
-            case_dir = os.path.join(adv_path, dataset)
-            gt_dir = os.path.join(case_dir, "GT_Files")
-            if not os.path.exists(gt_dir):
-                continue
-
-            # LLM run folder (anything except GT_Files)
-            run_folders = [f for f in os.listdir(case_dir)
-                           if os.path.isdir(os.path.join(case_dir, f)) and f != "GT_Files"]
-            if not run_folders:
-                continue
-            run_path = os.path.join(case_dir, run_folders[0])
-
-            total_rogue = 0
-            total_tree = 0
-            count = 0
-
-            for sub in SUBDIRS:
-                gt_sub = os.path.join(gt_dir, sub)
-                llm_sub = os.path.join(run_path, sub)
-                if os.path.exists(gt_sub) and os.path.exists(llm_sub):
-                    rogue, tree = compare_dir_pair(gt_sub, llm_sub)
-                    total_rogue += rogue
-                    total_tree += tree
-                    count += 1
-
-            if count > 0:
-                writer.writerow([dataset, 1,
-                                 round(total_rogue / count, 4),
-                                 round(total_tree / count, 4)])
 
 if __name__ == "__main__":
-    process_basic()
-    process_advanced()
-    print("Finished. Reports: 'similarity_report_basic.csv' and 'similarity_report_advanced.csv'")
+    sys.exit(main())

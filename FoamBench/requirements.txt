@@ -1,0 +1,5 @@
+numpy>=1.24
+pandas>=2.0
+pyvista>=0.43
+rouge-score>=0.1.2
+PyYAML>=6.0

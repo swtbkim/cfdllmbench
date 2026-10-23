@@ -1,0 +1,7 @@
+# OpenFOAM reads dictionaries and Allrun scripts byte by byte: a CRLF line ending
+# breaks the shebang of Allrun and confuses the dictionary parser. Keep every
+# text file LF even when the repository is cloned from Windows (WSL2 users).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary

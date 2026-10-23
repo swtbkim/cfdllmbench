@@ -1,113 +1,158 @@
+#!/usr/bin/env python3
+"""Relative error metric (M_NMSE): generated solution versus the reference solution.
+
+Both cases are read with pyvista's OpenFOAM reader at the last written time of
+the reference (the generated case is read at its closest time). For every
+field in ``--fields`` that both cases carry as cell data, the normalised mean
+squared error sum((y - y_hat)^2) / sum(y^2) is computed; the case score is the
+mean over those fields. If the generated mesh has a different cell count, the
+reference mesh is resampled onto it first. Any read failure gives the sentinel
+9999 (scored as 0 later).
+
+The reference cases must have been run with run_gt_cases.py before this script.
+
+    python3 nmse_report.py    # -> results/basic_nmse_report.csv, results/advanced_nmse_report.csv
+"""
+
+import argparse
+import csv
 import os
+import sys
+
 import numpy as np
-import pandas as pd
-import pyvista as pv
 
-def touch_foam_file(directory, file_name):
-    foam_path = os.path.join(directory, file_name)
-    with open(foam_path, 'w') as f:
-        pass
-    return foam_path
+from foambench_common import DATASET_DIR, RESULTS_DIR, ensure_dirs, generated_dir, gt_dir, iter_cases
 
-def calculate_nmse(array1, array2):
-    return np.sum((array1 - array2) ** 2) / np.sum(array1 ** 2)
+DEFAULT_FIELDS = ["U", "p", "rho", "T"]
+SENTINEL = 9999.0
 
-def align_and_scale_mesh(gt_mesh, meta_mesh):
-    gt_bounds = np.array(gt_mesh[0].bounds).reshape(3, 2)
-    meta_bounds = np.array(meta_mesh[0].bounds).reshape(3, 2)
 
-    if np.allclose(gt_bounds, meta_bounds, atol=1e-6):
-        return meta_mesh
+def nmse(ref, gen):
+    denom = float(np.sum(ref ** 2))
+    if denom == 0.0:
+        return SENTINEL
+    return float(np.sum((ref - gen) ** 2) / denom)
 
-    shift = gt_bounds[:, 0] - meta_bounds[:, 0]
-    gt_size = gt_bounds[:, 1] - gt_bounds[:, 0]
-    meta_size = meta_bounds[:, 1] - meta_bounds[:, 0]
-    scaling = np.divide(gt_size, meta_size, out=np.ones_like(gt_size), where=meta_size != 0)
 
-    aligned_meta_mesh = meta_mesh[0].copy()
-    aligned_meta_mesh.points = (aligned_meta_mesh.points - meta_bounds[:, 0]) * scaling + gt_bounds[:, 0]
-    return [aligned_meta_mesh]
+class FoamMarker:
+    """Context manager creating the empty .foam file pyvista needs, and removing it again."""
 
-def get_inner_run_folder(path):
-    for f in os.listdir(path):
-        full = os.path.join(path, f)
-        if os.path.isdir(full) and f != "GT_Files":
-            return full
-    return None
+    def __init__(self, case_root):
+        self.path = os.path.join(case_root, os.path.basename(case_root.rstrip("/")) + ".foam")
+        self.created = False
 
-def evaluate_nmse(gt_dir, llm_dir):
-    fields = ["U", "p", "rho", "T"]
-    gt_foam = touch_foam_file(gt_dir, os.path.basename(gt_dir) + ".foam")
-    llm_foam = touch_foam_file(llm_dir, os.path.basename(llm_dir) + ".foam")
+    def __enter__(self):
+        if not os.path.exists(self.path):
+            open(self.path, "w").close()
+            self.created = True
+        return self.path
 
+    def __exit__(self, *exc):
+        if self.created:
+            try:
+                os.remove(self.path)
+            except OSError:
+                pass
+
+
+def read_last(case_root, time_value=None):
+    import pyvista as pv
     try:
-        gt_reader = pv.OpenFOAMReader(gt_foam)
-        last_time = gt_reader.time_values[-1]
-        gt_reader.set_active_time_value(last_time)
-        meta_reader = pv.OpenFOAMReader(llm_foam)
-        closest_time = min(meta_reader.time_values, key=lambda x: abs(x - last_time))
-        meta_reader.set_active_time_value(closest_time)
-    except:
-        return 9999
+        # VTK prints verbose errors for unreadable cases; the sentinel score already reports them
+        import vtk
+        vtk.vtkObject.GlobalWarningDisplayOff()
+    except Exception:
+        pass
+    with FoamMarker(case_root) as marker:
+        reader = pv.OpenFOAMReader(marker)
+        times = list(reader.time_values)
+        if not times:
+            raise RuntimeError("no time directories")
+        if time_value is None:
+            t = times[-1]
+        else:
+            t = min(times, key=lambda x: abs(x - time_value))
+        reader.set_active_time_value(t)
+        multiblock = reader.read()
+        internal = multiblock[0]
+        return internal, t
 
-    gt_mesh = gt_reader.read()
-    meta_mesh = meta_reader.read()
-    meta_mesh = align_and_scale_mesh(gt_mesh, meta_mesh)
 
+def align_and_scale(ref_mesh, gen_mesh):
+    ref_b = np.array(ref_mesh.bounds).reshape(3, 2)
+    gen_b = np.array(gen_mesh.bounds).reshape(3, 2)
+    if np.allclose(ref_b, gen_b, atol=1e-6):
+        return gen_mesh
+    ref_size = ref_b[:, 1] - ref_b[:, 0]
+    gen_size = gen_b[:, 1] - gen_b[:, 0]
+    scaling = np.divide(ref_size, gen_size, out=np.ones_like(ref_size), where=gen_size != 0)
+    aligned = gen_mesh.copy()
+    aligned.points = (aligned.points - gen_b[:, 0]) * scaling + ref_b[:, 0]
+    return aligned
+
+
+def evaluate(gt_root, gen_root, fields):
+    try:
+        ref, t_ref = read_last(gt_root)
+        gen, _ = read_last(gen_root, t_ref)
+        gen = align_and_scale(ref, gen)
+    except Exception:
+        return SENTINEL
     scores = []
     for field in fields:
-        if field in gt_mesh[0].cell_data and field in meta_mesh[0].cell_data:
-            try:
-                if gt_mesh[0].n_cells != meta_mesh[0].n_cells:
-                    try:
-                        OG_mesh = gt_mesh.copy()
-                        if field in OG_mesh[0].point_data:
-                            del OG_mesh[0].point_data[field]
-                        if field in OG_mesh[0].cell_data:
-                            del OG_mesh[0].cell_data[field]
-                        projected_mesh = [OG_mesh[0].interpolate(meta_mesh[0], sharpness=0.1, n_points=50)]
-                        projected_mesh[0] = projected_mesh[0].point_data_to_cell_data()
-                        meta_data = projected_mesh[0][field]
-                    except:
-                        scores.append(9999)
-                        continue
-                else:
-                    meta_data = meta_mesh[0][field]
-
-                gt_data = gt_mesh[0][field]
-                score = calculate_nmse(gt_data, meta_data)
-                scores.append(score)
-            except:
-                scores.append(9999)
-    if scores:
-        return np.mean(scores)
-    else:
-        return 9999
-
-def process_all(base_dir, is_advanced=False):
-    records = []
-    base_path = os.path.join(base_dir, "Advanced" if is_advanced else "Basic")
-    datasets = os.listdir(base_path)
-
-    for dataset in datasets:
-        dataset_dir = os.path.join(base_path, dataset)
-        if not os.path.isdir(dataset_dir):
+        if field not in ref.cell_data or field not in gen.cell_data:
             continue
-        dirs = [1] if is_advanced else range(1, 11)
-        for i in dirs:
-            case_dir = dataset_dir if is_advanced else os.path.join(dataset_dir, str(i))
-            gt_dir = os.path.join(case_dir, "GT_Files")
-            llm_dir = get_inner_run_folder(case_dir)
-            if not gt_dir or not llm_dir or not os.path.exists(gt_dir) or not os.path.exists(llm_dir):
-                score = 9999
+        try:
+            ref_data = np.asarray(ref.cell_data[field], dtype=float)
+            if ref.n_cells != gen.n_cells:
+                probe = ref.copy()
+                for key in (field,):
+                    if key in probe.point_data:
+                        del probe.point_data[key]
+                    if key in probe.cell_data:
+                        del probe.cell_data[key]
+                projected = probe.interpolate(gen, sharpness=0.1, n_points=50).point_data_to_cell_data()
+                gen_data = np.asarray(projected[field], dtype=float)
             else:
-                score = evaluate_nmse(gt_dir, llm_dir)
-            records.append([dataset, i, score])
-    return pd.DataFrame(records, columns=["Dataset", "Directory", "NMSE"])
+                gen_data = np.asarray(gen.cell_data[field], dtype=float)
+            if ref_data.shape != gen_data.shape:
+                scores.append(SENTINEL)
+                continue
+            scores.append(nmse(ref_data, gen_data))
+        except Exception:
+            scores.append(SENTINEL)
+    return float(np.mean(scores)) if scores else SENTINEL
 
-# Run for both Basic and Advanced
-basic_df = process_all("Dataset", is_advanced=False)
-advanced_df = process_all("Dataset", is_advanced=True)
 
-basic_df.to_csv("basic_nmse_report.csv", index=False)
-advanced_df.to_csv("advanced_nmse_report.csv", index=False)
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--dataset", default=DATASET_DIR)
+    ap.add_argument("--results", default=RESULTS_DIR)
+    ap.add_argument("--fields", nargs="+", default=DEFAULT_FIELDS)
+    ap.add_argument("--self-check", action="store_true",
+                    help="compare every reference case against itself (expected NMSE 0); validates the pipeline")
+    args = ap.parse_args()
+    ensure_dirs()
+    os.makedirs(args.results, exist_ok=True)
+    for split, name in (("Basic", "basic_nmse_report.csv"), ("Advanced", "advanced_nmse_report.csv")):
+        out = os.path.join(args.results, name)
+        n, scored = 0, 0
+        with open(out, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["Dataset", "Directory", "NMSE"])
+            for _, dataset, directory, case_dir in iter_cases(args.dataset, (split,)):
+                gt_root = gt_dir(case_dir)
+                gen_root = gt_root if args.self_check else generated_dir(case_dir)
+                if gen_root and os.path.isdir(gt_root):
+                    score = evaluate(gt_root, gen_root, args.fields)
+                else:
+                    score = SENTINEL
+                w.writerow([dataset, directory, score])
+                n += 1
+                scored += score < SENTINEL
+        print(f"{split}: {scored}/{n} cases scored -> {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

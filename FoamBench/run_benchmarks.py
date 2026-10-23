@@ -1,96 +1,124 @@
-import os
-import subprocess
+#!/usr/bin/env python3
+"""Example benchmark driver for the MetaOpenFOAM framework.
+
+This script is specific to MetaOpenFOAM (https://github.com/Terry-cyx/MetaOpenFOAM):
+for every unpacked case it points MetaOpenFOAM at the case's YAML config (written by
+``read_json.py --metaopenfoam-yaml``), runs the framework, and moves the files the
+framework produced into ``<case>/generated`` where the report scripts expect them.
+Other frameworks only need to reproduce that last step: put the generated OpenFOAM
+case (including its log.* files) under ``<case>/generated``.
+
+    source /usr/lib/openfoam/openfoam2412/etc/bashrc
+    export OPENAI_API_KEY=...
+    python3 read_json.py --metaopenfoam-yaml
+    python3 run_benchmarks.py --mode basic
+"""
+
 import argparse
+import os
 import shutil
+import subprocess
+import sys
 
-# === Paths & Constants ===
-BASIC_ROOT = "./Dataset/Basic"
-ADVANCED_ROOT = "./Dataset/Advanced"
-SRC_DIR = "./algorithm/MetaOpenFOAM/src"
-PYTHON = "python"
+from foambench_common import DATASET_DIR, FOAMBENCH_DIR, GENERATED_DIRNAME, LOGS_DIR, ensure_dirs, iter_cases, openfoam_env
 
-# === Workflow Step Scripts ===
-SCRIPTS = [
-    ("config_path", "config_path.py"),
+META_ROOT = os.path.join(FOAMBENCH_DIR, "algorithm", "MetaOpenFOAM")
+SRC_DIR = os.path.join(META_ROOT, "src")
+PYTHON = sys.executable
+
+# One-time database builders (run once) and the per-case workflow.
+DB_SCRIPTS = [
     ("postprocess", "Tutorial_postprocess.py"),
     ("db_add_summary", "Langchain_database_add_tutorial_summary.py"),
     ("db_add_tutorial", "Langchain_database_add_tutorial.py"),
     ("db_add_command", "Langchain_database_add_command.py"),
     ("db_add_allrun", "Langchain_database_add_allrun.py"),
+]
+CASE_SCRIPTS = [
+    ("config_path", "config_path.py"),
     ("main", "metaOpenfoam_v2.py"),
 ]
 
-def run_workflow(input_yaml):
-    """Set CONFIG_FILE_PATH and run full workflow on one YAML case."""
-    input_dir = os.path.dirname(input_yaml)
-    case_name = os.path.basename(input_dir)
+
+def run_scripts(scripts, input_yaml, log):
+    for label, script in scripts:
+        script_path = os.path.join(SRC_DIR, script)
+        cmd = [PYTHON, "-u", script_path] + ([input_yaml] if label == "config_path" else [])
+        print(f"  running {label}: {script}")
+        result = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT)
+        if result.returncode != 0:
+            print(f"  step {label} failed with code {result.returncode}")
+            return False
+    return True
+
+
+def run_workflow(input_yaml, case_dir, label):
     os.environ["CONFIG_FILE_PATH"] = input_yaml
     os.environ["INPUT_DIR"] = os.path.dirname(input_yaml)
     os.environ["INPUT_DIR_METAFOAM"] = os.path.dirname(input_yaml)
-    os.environ["WM_PROJECT_DIR"] = "xxxxx" # provide your openfoam path here
 
-    meta_root = "./algorithm/MetaOpenFOAM"
-    run_source = os.path.join(meta_root, "run")
-
-    # === Step 1: Create a fresh run/ folder before the workflow ===
+    run_source = os.path.join(META_ROOT, "run")
     if os.path.exists(run_source):
         shutil.rmtree(run_source)
     os.makedirs(run_source, exist_ok=True)
 
-    for label, script in SCRIPTS:
-        script_path = os.path.join(SRC_DIR, script)
-        print(f"Running {label}: {script_path}")
+    log_path = os.path.join(LOGS_DIR, f"metaopenfoam_{label.replace('/', '_')}.log")
+    with open(log_path, "w", encoding="utf-8") as log:
+        ok = run_scripts(CASE_SCRIPTS, input_yaml, log)
 
-        try:
-            subprocess.run([PYTHON, "-u", script_path, input_yaml] if label == "config_path" else [PYTHON, "-u", script_path], check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Failed on {label} for {input_yaml}: {e}")
-            return
+    generated = os.path.join(case_dir, GENERATED_DIRNAME)
+    if os.path.exists(generated):
+        shutil.rmtree(generated)
+    os.makedirs(generated, exist_ok=True)
+    for item in os.listdir(run_source):
+        shutil.move(os.path.join(run_source, item), os.path.join(generated, item))
+    shutil.rmtree(run_source, ignore_errors=True)
+    print(f"  {'done' if ok else 'FAILED'}; output in {generated}, log in {log_path}")
+    return ok
 
-            # === Step 3: Move contents of run/ into case directory ===
-    if os.path.exists(run_source):
-        print(f"Moving contents of 'run/' → {input_dir}")
-        for item in os.listdir(run_source):
-            src_item = os.path.join(run_source, item)
-            dst_item = os.path.join(input_dir, item)
 
-            # Clean existing files if needed
-            if os.path.exists(dst_item):
-                if os.path.isdir(dst_item):
-                    shutil.rmtree(dst_item)
-                else:
-                    os.remove(dst_item)
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--mode", choices=["basic", "advanced", "all"], default="all")
+    ap.add_argument("--dataset", default=DATASET_DIR)
+    ap.add_argument("--skip-db", action="store_true", help="skip the one-time MetaOpenFOAM database build")
+    ap.add_argument("--only", action="append", help="regex on '<family>/<n>' or the Advanced case name; repeatable")
+    args = ap.parse_args()
 
-            shutil.move(src_item, dst_item)
+    wm, version = openfoam_env()
+    ensure_dirs()
+    if not os.path.isdir(SRC_DIR):
+        sys.exit(f"MetaOpenFOAM not found at {META_ROOT}; clone it into algorithm/ first")
+    if not os.environ.get("OPENAI_API_KEY"):
+        sys.exit("OPENAI_API_KEY is not set")
+    print(f"OpenFOAM {version} at {wm}")
 
-        shutil.rmtree(run_source)
-    else:
-        print(f"Source run folder not found: {run_source}")
+    splits = {"basic": ("Basic",), "advanced": ("Advanced",), "all": ("Basic", "Advanced")}[args.mode]
+    cases = list(iter_cases(args.dataset, splits, args.only))
+    if not cases:
+        sys.exit("no unpacked cases found; run read_json.py --metaopenfoam-yaml first")
 
-def run_basic_cases():
-    for dataset in os.listdir(BASIC_ROOT):
-        for case_id in range(1, 11):
-            case_yaml = os.path.join(BASIC_ROOT, dataset, str(case_id), f"{dataset}.yaml")
-            if os.path.isfile(case_yaml):
-                print(f"\nRunning BASIC case: {dataset}/{case_id}")
-                run_workflow(case_yaml)
+    if not args.skip_db:
+        first_yaml = os.path.join(cases[0][3], f"{cases[0][1]}.yaml")
+        with open(os.path.join(LOGS_DIR, "metaopenfoam_database.log"), "w", encoding="utf-8") as log:
+            os.environ["CONFIG_FILE_PATH"] = first_yaml
+            if not run_scripts([("config_path", "config_path.py")] + DB_SCRIPTS, first_yaml, log):
+                sys.exit("MetaOpenFOAM database build failed; see logs/metaopenfoam_database.log")
 
-def run_advanced_cases():
-    for dataset in os.listdir(ADVANCED_ROOT):
-        case_yaml = os.path.join(ADVANCED_ROOT, dataset, f"{dataset}.yaml")
-        if os.path.isfile(case_yaml):
-            print(f"Running ADVANCED case: {dataset}")
-            run_workflow(case_yaml)
+    failures = 0
+    for split, dataset, directory, case_dir in cases:
+        label = f"{dataset}/{directory}" if split == "Basic" else dataset
+        yaml_path = os.path.join(case_dir, f"{dataset}.yaml")
+        if not os.path.isfile(yaml_path):
+            print(f"{label}: no {dataset}.yaml (run read_json.py --metaopenfoam-yaml); skipped")
+            failures += 1
+            continue
+        print(f"\n{split} case {label}")
+        if not run_workflow(yaml_path, case_dir, label):
+            failures += 1
+    print(f"\nfinished {len(cases)} cases, {failures} failed")
+    return 0 if failures == 0 else 1
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Unified Benchmark Runner for CFD Workflow")
-    parser.add_argument('--mode', type=str, choices=['basic', 'advanced', 'all'], default='all',
-                        help='Which group of cases to run')
-    args = parser.parse_args()
-
-    print(f"Running CFD workflow for: {args.mode.upper()}")
-    if args.mode in ('basic', 'all'):
-        run_basic_cases()
-    if args.mode in ('advanced', 'all'):
-        run_advanced_cases()
-
+    sys.exit(main())

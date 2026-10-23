@@ -1,150 +1,158 @@
+# FoamBench
 
-# OpenFOAM Benchmark Framework
+FoamBench measures how well an LLM agent can set up and run an OpenFOAM
+simulation from a natural-language request. Every case is a prompt plus a
+reference OpenFOAM case; the agent's case is scored on whether it runs, how
+closely its files match the reference, and how closely its final flow field
+matches the reference solution.
 
-A framework for running and evaluating different algorithms on OpenFOAM benchmark cases.
+The reference cases target **OpenFOAM v2412 (openfoam.com)**. They were
+ported from the OpenFOAM v10 (openfoam.org) cases used in the paper; see
+[PORTING_NOTES.md](PORTING_NOTES.md) for every change. The original v10
+datasets are kept in `Dataset/v10/`.
 
-## Project Structure
+## Dataset
+
+| Split | Cases | Content |
+|---|---|---|
+| Basic | 110 | 11 flow families derived from OpenFOAM tutorials, 10 variants each (boundary values, viscosity, temperatures, ...) |
+| Advanced | 16 | new geometries (diamond, rectangle, two squares, nozzle) and turbulence-model variants (Spalart-Allmaras, k-omega SST, LES) |
+
+| Family | Solver | Variants change |
+|---|---|---|
+| BernardCells | buoyantBoussinesqPimpleFoam | floor / ceiling temperature |
+| Cavity | pisoFoam (k-epsilon) | lid velocity, viscosity |
+| Cylinder | pimpleFoam (Cross-Power-Law) | inlet velocity, viscosity |
+| counterFlowFlame2D | reactingFoam | fuel / air inlet velocity |
+| damBreakWithObstacle | interFoam | phase viscosities |
+| forwardStep | rhoCentralFoam | inlet velocity |
+| obliqueShock | rhoCentralFoam | inlet / top velocity and temperature |
+| pitzDaily | pimpleFoam (k-epsilon) | inlet velocity, viscosity |
+| shallowWaterWithSquareBump | shallowWaterFoam | water depth |
+| squareBend | rhoSimpleFoam (k-epsilon) | inlet temperature, viscosity, Prandtl number, time step |
+| wedge | rhoCentralFoam | inlet velocity, temperature, Prandtl number |
+
+Each case in `Dataset/FoamBench_basic.json` / `Dataset/FoamBench_advanced.json`
+is a dictionary `{"usr_requirement": <prompt>, "Allrun": ..., "0/U": ...,
+"system/controlDict": ..., ...}`. A readable version of every case, with the
+differences between variants, is under [`Dataset/md/`](Dataset/md/README.md).
+
+## Layout
 
 ```
 FoamBench/
-├── Dataset/                  # Contains the benchmark datasets
-│   ├── FoamBench_basic.json # To be downloaded from data repository
-│   ├── FoamBench_advanced.json # To be downloaded from data repository
-│   ├── Basic/ # json will be unpacked to this folder
-│   │   └── [dataset_name]/
-│   │       └── [1-10]/
-│   │           ├── GT_Files/ # Reference OpenFOAM files unpacked from json
-│   │           └── algorithm_files/ # OpenFOAM files produced by the framework
-│   └── Advanced/
-│       └── [dataset_name]/
-│           ├── GT_Files/
-│           └── algorithm_files/
-├── algorithm/
-│   └── framework_name/         # Folder top place the framework you want to run the benchmark with example, MetaOpenFOAM, Foam-Agent etc
-├── logs/                    # Log files for benchmark runs
-├── results/                 # Output and analysis results
-├── runs/                    # Runtime files
-├── execution_report.py
-├── nmse_report.py
-├── similarity_report.py
-├── score_calculation.py
-├── read_json_basic.py
-├── read_json_advanced.py
-└── run_benchmarks.py # Example file to run the benchmark with MetaOpenFOAM
+├── Dataset/
+│   ├── FoamBench_basic.json       110 Basic cases (OpenFOAM v2412)
+│   ├── FoamBench_advanced.json    16 Advanced cases (OpenFOAM v2412)
+│   ├── md/                        one Markdown page per case (generated)
+│   ├── v10/                       original OpenFOAM v10 datasets
+│   ├── Basic/<family>/<n>/        unpacked cases (read_json.py)
+│   │   ├── usr_requirement.txt    the prompt
+│   │   ├── GT_Files/              reference case
+│   │   └── generated/             the framework's case goes here
+│   └── Advanced/<case>/           same layout
+├── tools/
+│   ├── port_v10_to_v2412.py       v10 -> v2412 converter (regenerates the JSON files)
+│   └── json_to_markdown.py        JSON -> Dataset/md
+├── algorithm/example/             how to plug a framework in (Foam-Agent style)
+├── foambench_common.py            shared helpers
+├── read_json.py                   unpack the JSON datasets
+├── check_env.py                   verify OpenFOAM + Python environment
+├── run_gt_cases.py                run all reference cases (needed for NMSE)
+├── run_benchmarks.py              example driver for MetaOpenFOAM
+├── execution_report.py            M_exec
+├── similarity_report.py           M_struct, M_file
+├── nmse_report.py                 M_NMSE
+├── score_calculation.py           final scores
+├── results/                       CSV outputs
+├── logs/                          run logs
+├── Dockerfile                     OpenFOAM v2412 image with the scripts
+└── requirements.txt
 ```
 
 ## Prerequisites
 
-- Python 3.x
-- packages - pandas, pyvista and rogue_scores (pip install pyvista, pip install pandas, pip install rouge-score)
-- OpenFOAM version 10
-- Set up OpenFOAM environment:
+- OpenFOAM v2412 from openfoam.com. On WSL2 / Ubuntu:
+
+  ```bash
+  curl https://dl.openfoam.com/add-debian-repo.sh | sudo bash
+  sudo apt-get install openfoam2412-default
+  source /usr/lib/openfoam/openfoam2412/etc/bashrc     # add to ~/.bashrc
+  ```
+
+  Keep the repository on the Linux filesystem (for example `~/cfdllmbench`),
+  not under `/mnt/c`.
+
+- Python 3.9+ with `pip install -r requirements.txt` (numpy, pandas, pyvista,
+  rouge-score, PyYAML). A virtual environment is recommended:
+
+  ```bash
+  python3 -m venv ~/foambench-venv && source ~/foambench-venv/bin/activate
+  pip install -r requirements.txt
+  ```
+
+- `python3 check_env.py` reports anything missing.
+
+## Running the benchmark
+
+All commands run from this directory with the OpenFOAM environment sourced.
+
+1. Unpack the datasets and run the reference cases once (the NMSE metric needs
+   reference results; this takes a few hours on four cores):
+
+   ```bash
+   python3 read_json.py
+   python3 run_gt_cases.py -j 4
+   ```
+
+   `results/gt_run_v2412.csv` lists the outcome and run time of every case.
+
+2. Run your framework on every case. For each case the framework gets
+   `usr_requirement.txt` (the prompt) and must leave its complete OpenFOAM
+   case, including the `log.*` files of the tools it ran, under
+   `<case>/generated/` (another sub-directory name also works, but `generated`
+   is preferred). `run_benchmarks.py` does this for MetaOpenFOAM;
+   `algorithm/example/foambench_main.py` shows the Foam-Agent interface. A
+   minimal loop for any framework:
+
+   ```bash
+   for case in Dataset/Basic/*/* Dataset/Advanced/*; do
+       my_framework --prompt "$case/usr_requirement.txt" --output "$case/generated"
+   done
+   ```
+
+3. Score:
+
+   ```bash
+   python3 execution_report.py     # results/{basic,advanced}_success_report.csv
+   python3 similarity_report.py    # results/similarity_report_{basic,advanced}.csv
+   python3 nmse_report.py          # results/{basic,advanced}_nmse_report.csv
+   python3 score_calculation.py    # results/final_benchmark_scores.csv, per_case_scores.csv
+   ```
+
+   `python3 nmse_report.py --self-check` compares every reference case with
+   itself (NMSE 0) and is a quick test of the pipeline.
+
+## Metrics
+
+| Metric | Definition |
+|---|---|
+| `M_exec` | 1 if the solver log of the generated case (`log.<application>` from its `controlDict`, or any `log.*Foam`) ends with `End` |
+| `M_struct` | share of reference files (under `0/`, `constant/`, `system/`) that exist at the same relative path in the generated case, averaged over the three directories |
+| `M_file` | mean ROUGE-L F-measure between reference and generated file text (comments and banner removed); a missing file counts 0 |
+| `M_NMSE` | NMSE of the fields `U`, `p`, `rho`, `T` (those present in both) at the last reference time, mean over fields; 1 if NMSE < 0.1, 0.5 if NMSE < 0.3, else 0. Meshes with different cell counts are resampled |
+| Success Ratio | share of cases with `M_exec` = 1 and `M_NMSE` = 1 |
+
+## Regenerating the datasets
 
 ```bash
-source /path/to/OpenFOAM-10/etc/bashrc
-export WM_PROJECT_DIR="/path/to/OpenFOAM-10"
+python3 tools/port_v10_to_v2412.py --src Dataset/v10 --dst Dataset --report results/port_report.json
+python3 tools/json_to_markdown.py --dataset Dataset --out Dataset/md --clean
 ```
-
-## Setup
-
-1. Clone this repository:
-```bash
-git clone <repo_url>
-cd FoamBench
-```
-
-2. The latest (V2) dataset is included in this repository: [`Dataset/FoamBench_basic.json`](Dataset/FoamBench_basic.json) and [`Dataset/FoamBench_advanced.json`](Dataset/FoamBench_advanced.json). The dataset used in the paper can be downloaded from `https://www.kaggle.com/datasets/nithinsekhar/foambench/data`; to use it instead, place:
-   - From FoamBench folder in the dataset, copy files `FoamBench_basic.json` and `FoamBench_advanced.json` into `Dataset/` folder.
-
-3. Add your algorithm:
-```bash
-# For example, to add MetaOpenFOAM:
-cd algorithm
-git clone git@github.com:Terry-cyx/MetaOpenFOAM.git
-```
-
-## Running Benchmarks
-
-1. Unpack JSON benchmarks:
-```bash
-python read_json_basic.py      # Unpacks Basic dataset. You will have to add certain paths and keys in this script
-python read_json_advanced.py   # Unpacks Advanced dataset. You will have to add certain paths and keys in this script
-```
-
-2. Run benchmark:
-```bash
-python run_benchmarks.py       # Runs benchmarks on both Basic and Advanced. Note that this script is custom built to run only with MetaOpenFOAM. Following the same logic you can connect the benchmark to any other framework as well.
-```
-
-After running, folder structure becomes:
-```
-Dataset/
-├── Basic/
-│   └── [dataset_name]/
-│       └── [1-10]/
-│           ├── GT_Files/
-│           └── framework_generated_files/
-└── Advanced/
-    └── [dataset_name]/
-        ├── GT_Files/
-        └── framework_generated_files/
-```
-
-## Evaluation & Scoring
-
-Run the following scripts in order:
-
-1. **Execution Score** 
-```bash
-python execution_report.py
-```
-This generates:
-- `execution_status_basic.csv`
-- `execution_status_advanced.csv`
-
-2. **Structural Similarity (Tree/ROUGE SCORE)** 
-```bash
-python similarity_report.py
-```
-
-3. **Numerical Accuracy (NMSE)**  
-```bash
-python nmse_report.py
-```
-
-4. **Final Metrics Calculation**
-```bash
-python score_calculation.py
-```
-This script outputs:
-- `scores_basic.csv`
-- `scores_advanced.csv`
-
-Metrics computed:
-- `M_exec`   — Execution score
-- `M_NMSE`   — NMSE quality score
-- `M_struct`   — Tree similarity score
-- `M_file`   — Code-level ROUGE score
-- `Success Ratio` — Overall success score
-
 
 ## Docker
-We provide a Dockerfile to simplify setting up the OpenFOAM + benchmarking environment.
 
-🔧 Build the Docker Image
-First, make sure Docker is installed and running on your system.
-
-Then, from the root of this repository, build the Docker image:
 ```bash
-docker build -t foam-bench .
+docker build -t foam-bench .          # from this directory
+docker run -it --rm foam-bench        # OpenFOAM v2412 is sourced in the shell
 ```
-This installs OpenFOAM 10 inside the container and copies all the benchmark files to the container. Then run the command
-```bash
-docker run -it --rm foam-bench
-```
-This will take you to the folder in container where the benchmark files are present. 
-To know the location of OpenFOAM within container, perform
-```bash
-echo $WM_PROJECT_DIR
-```
-Further run the scripts as mentioned above, in sequence within the container. 

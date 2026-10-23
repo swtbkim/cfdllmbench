@@ -1,0 +1,19 @@
+# Unpacked reference cases and run artefacts (regenerate with read_json.py / run_gt_cases.py)
+FoamBench/Dataset/Basic/
+FoamBench/Dataset/Advanced/
+FoamBench/logs/*
+!FoamBench/logs/.gitkeep
+FoamBench/runs/*
+!FoamBench/runs/.gitkeep
+FoamBench/algorithm/*
+!FoamBench/algorithm/example/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# mkdocs
+site/
+.cache/
