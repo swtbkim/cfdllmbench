@@ -39,11 +39,13 @@ def clean_case(case_root):
     """Remove results of a previous run (time directories, logs, polyMesh, postProcessing)."""
     for name in os.listdir(case_root):
         path = os.path.join(case_root, name)
-        if name.startswith("log.") or name.endswith(".foam"):
+        if os.path.isfile(path) and (name.startswith("log.") or name.endswith(".foam")):
             os.remove(path)
-        elif os.path.isdir(path) and (TIME_DIR_RE.match(name) and name != "0") or name in ("postProcessing", "processor0"):
+        elif not os.path.isdir(path):
+            continue
+        elif TIME_DIR_RE.match(name) and name != "0":
             shutil.rmtree(path, ignore_errors=True)
-        elif name.startswith("processor") and os.path.isdir(path):
+        elif name == "postProcessing" or name.startswith("processor"):
             shutil.rmtree(path, ignore_errors=True)
     poly = os.path.join(case_root, "constant", "polyMesh")
     if os.path.isdir(poly):
