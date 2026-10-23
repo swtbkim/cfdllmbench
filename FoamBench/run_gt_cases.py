@@ -22,6 +22,7 @@ import csv
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -81,12 +82,22 @@ def run_one(split, dataset, directory, case_dir, timeout, clean):
     os.chmod(allrun, 0o755)
     start = time.time()
     error = ""
-    try:
-        with open(log_path, "w", encoding="utf-8") as log:
-            subprocess.run(["sh", "./Allrun"], cwd=case_root, stdout=log, stderr=subprocess.STDOUT,
-                           timeout=timeout, check=False)
-    except subprocess.TimeoutExpired:
-        error = f"timeout after {timeout}s"
+    with open(log_path, "w", encoding="utf-8") as log:
+        # own process group so that a timeout also stops the solver Allrun started
+        proc = subprocess.Popen(["sh", "./Allrun"], cwd=case_root, stdout=log, stderr=subprocess.STDOUT,
+                                start_new_session=True)
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            error = f"timeout after {timeout}s"
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+                proc.wait(timeout=30)
+            except Exception:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except Exception:
+                    pass
     seconds = round(time.time() - start, 1)
     success = 1 if solver_log_success(case_root) else 0
     if not success and not error:
@@ -99,7 +110,7 @@ def main():
     ap.add_argument("-j", "--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--timeout", type=int, default=7200, help="seconds per case (default 7200)")
     ap.add_argument("--split", choices=["basic", "advanced", "all"], default="all")
-    ap.add_argument("--only", action="append", help="regex on '<family>/<n>' or the Advanced case name; repeatable")
+    ap.add_argument("--only", action="append", help="regex searched in '<family>/<n>' or the Advanced case name (anchor it, e.g. '^Cavity/1$', for one case); repeatable")
     ap.add_argument("--clean", action="store_true", help="delete previous results in each GT case first")
     ap.add_argument("--dataset", default=DATASET_DIR)
     ap.add_argument("--out", help="CSV path (default results/gt_run_<version>.csv)")
@@ -117,7 +128,11 @@ def main():
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         futures = {pool.submit(run_one, *c, args.timeout, args.clean): c for c in cases}
         for fut in as_completed(futures):
-            row = fut.result()
+            try:
+                row = fut.result()
+            except Exception as exc:  # keep the run going; the case is recorded as failed
+                split, dataset, directory, _ = futures[fut]
+                row = [split, dataset, directory, 0, 0.0, "", f"runner error: {exc}"]
             rows.append(row)
             status = "ok " if row[3] else "FAIL"
             print(f"[{len(rows):3d}/{len(cases)}] {status} {row[0]}/{row[1]}/{row[2]} {row[4]:7.1f}s {row[6]}")

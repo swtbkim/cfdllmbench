@@ -70,9 +70,14 @@ def run_workflow(input_yaml, case_dir, label):
     if os.path.exists(generated):
         shutil.rmtree(generated)
     os.makedirs(generated, exist_ok=True)
-    for item in os.listdir(run_source):
+    # MetaOpenFOAM writes run/<caseName>/...; flatten that single case directory into generated/
+    items = os.listdir(run_source)
+    if len(items) == 1 and os.path.isdir(os.path.join(run_source, items[0])):
+        run_source = os.path.join(run_source, items[0])
+        items = os.listdir(run_source)
+    for item in items:
         shutil.move(os.path.join(run_source, item), os.path.join(generated, item))
-    shutil.rmtree(run_source, ignore_errors=True)
+    shutil.rmtree(os.path.join(META_ROOT, "run"), ignore_errors=True)
     print(f"  {'done' if ok else 'FAILED'}; output in {generated}, log in {log_path}")
     return ok
 
@@ -82,7 +87,7 @@ def main():
     ap.add_argument("--mode", choices=["basic", "advanced", "all"], default="all")
     ap.add_argument("--dataset", default=DATASET_DIR)
     ap.add_argument("--skip-db", action="store_true", help="skip the one-time MetaOpenFOAM database build")
-    ap.add_argument("--only", action="append", help="regex on '<family>/<n>' or the Advanced case name; repeatable")
+    ap.add_argument("--only", action="append", help="regex searched in '<family>/<n>' or the Advanced case name (anchor it for one case); repeatable")
     args = ap.parse_args()
 
     wm, version = openfoam_env()

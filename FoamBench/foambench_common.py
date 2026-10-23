@@ -40,6 +40,10 @@ def openfoam_env():
 def iter_cases(dataset_dir=DATASET_DIR, splits=SPLITS, only=None):
     """Yield (split, dataset, directory_label, case_dir) for every unpacked case.
 
+    ``only`` is a list of regular expressions searched (not anchored) in the case
+    label '<family>/<n>' or the Advanced case name; anchor them ('^Cavity/1$')
+    for an exact match.
+
     Basic cases live at Dataset/Basic/<family>/<1..10>/, Advanced cases at
     Dataset/Advanced/<name>/. ``directory_label`` is the variant number for Basic
     and 1 for Advanced, matching the CSV layout of the original scripts.
@@ -81,12 +85,28 @@ def generated_dir(case_dir):
     """
     preferred = os.path.join(case_dir, GENERATED_DIRNAME)
     if os.path.isdir(preferred):
-        return preferred
+        return _descend_to_case(preferred)
     others = sorted(
         d for d in os.listdir(case_dir)
         if os.path.isdir(os.path.join(case_dir, d)) and d != GT_DIRNAME
     )
-    return os.path.join(case_dir, others[0]) if others else None
+    return _descend_to_case(os.path.join(case_dir, others[0])) if others else None
+
+
+def _descend_to_case(path):
+    """If ``path`` is not itself an OpenFOAM case but wraps exactly one directory that is, return that.
+
+    Frameworks such as MetaOpenFOAM write run/<caseName>/..., so the moved output
+    is one level deeper than the reports expect.
+    """
+    for _ in range(3):
+        if os.path.isdir(os.path.join(path, "system")) or os.path.isdir(os.path.join(path, "constant")):
+            return path
+        subdirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
+        if len(subdirs) != 1:
+            return path
+        path = os.path.join(path, subdirs[0])
+    return path
 
 
 def application_of(case_root):
@@ -121,12 +141,14 @@ def solver_log_success(case_root):
     scored execution.
     """
     app = application_of(case_root)
-    fallback = []
+    app_logs, fallback = [], []
     for root, dirs, files in os.walk(case_root):
         for name in files:
             if app and name == f"log.{app}":
-                if log_ended(os.path.join(root, name)):
-                    return True
+                app_logs.append(os.path.join(root, name))
             elif name.startswith("log.") and name.endswith("Foam"):
                 fallback.append(os.path.join(root, name))
+    if app_logs:
+        # the solver named in controlDict decides; other *Foam logs are pre-processing tools
+        return any(log_ended(p) for p in app_logs)
     return any(log_ended(p) for p in fallback)

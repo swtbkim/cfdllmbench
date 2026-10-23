@@ -74,6 +74,8 @@ def main():
     # Scripts can be Python or shell scripts.
     
     SCRIPTS = []
+    # Database paths are relative to this script's directory, which is also the cwd run_command() uses
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
     
     # Preprocess the OpenFOAM tutorials
     if not os.path.exists("./database/raw/openfoam_tutorials_details.txt"):

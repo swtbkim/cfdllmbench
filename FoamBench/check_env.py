@@ -42,6 +42,11 @@ def main():
         except ImportError:
             print(f"FAIL  python module {mod} missing (pip install -r requirements.txt)")
             ok = False
+    try:
+        importlib.import_module("yaml")
+        print("ok    python module yaml")
+    except ImportError:
+        print("warn  python module yaml missing (only needed for read_json.py --metaopenfoam-yaml / run_benchmarks.py)")
     cwd = os.getcwd()
     if cwd.startswith("/mnt/"):
         print("warn  the working directory is on a Windows drive (/mnt/...); OpenFOAM is much faster on the WSL2 Linux filesystem (e.g. ~/)")

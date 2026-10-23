@@ -262,7 +262,7 @@ def combustion_thermo_file(text):
         lines = "".join(f"        {e:<8}{n};\n" for e, n in elems.items())
         return m.group(0) + "    elements\n    {\n" + lines + "    }\n"
     body = re.sub(r"\n(\w+)\n\{\n    specie\n    \{\n[^}]*\}\n", add_elements, body)
-    return replace_banner(foamfile("dictionary", "thermo.compressibleGas", "constant")) + SEPARATOR + body
+    return replace_banner(foamfile("dictionary", "thermo.compressibleGas", "constant")) + SEPARATOR + "\n" + body.lstrip("\n")
 
 
 def combustion_reactions_file(text, species):
@@ -396,6 +396,8 @@ def kinematic_pressure(text):
 
 def bernard_p_rgh(text):
     text = kinematic_pressure(text)
+    if "rhok" in text:
+        return text
     text = re.sub(
         r"(type\s+fixedFluxPressure;\n)",
         r"\g<1>        rho             rhok;\n",

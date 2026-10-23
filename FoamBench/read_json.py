@@ -11,9 +11,11 @@ Layout written for every case:
     Dataset/Advanced/<name>/GT_Files/...
     Dataset/Advanced/<name>/usr_requirement.txt
 
-Credentials for an LLM framework are never written here; MetaOpenFOAM reads the
-OPENAI_API_KEY / OPENAI_BASE_URL / METAGPT_PATH environment variables through the
-YAML that ``--metaopenfoam-yaml`` emits with placeholders.
+No credential is stored in the repository. With ``--metaopenfoam-yaml`` the
+per-case YAML that MetaOpenFOAM needs is written from the OPENAI_API_KEY /
+OPENAI_BASE_URL / METAGPT_PATH / OPENAI_MODEL environment variables at unpack
+time (placeholders if unset); the unpacked Dataset/Basic and Dataset/Advanced
+trees are ignored by git.
 """
 
 import argparse
