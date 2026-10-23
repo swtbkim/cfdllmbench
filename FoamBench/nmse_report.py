@@ -6,8 +6,10 @@ the reference (the generated case is read at its closest time). For every
 field in ``--fields`` that both cases carry as cell data, the normalised mean
 squared error sum((y - y_hat)^2) / sum(y^2) is computed; the case score is the
 mean over those fields. If the generated mesh has a different cell count, the
-reference mesh is resampled onto it first. Any read failure gives the sentinel
-9999 (scored as 0 later).
+generated solution is sampled at the reference cell centres first (value of
+the generated cell containing each centre). A generated case without a
+written solution (only time 0) and any read failure give the sentinel 9999
+(scored as 0 later).
 
 The reference cases must have been run with run_gt_cases.py before this script.
 
@@ -65,9 +67,10 @@ def read_last(case_root, time_value=None):
         pass
     with FoamMarker(case_root) as marker:
         reader = pv.OpenFOAMReader(marker)
-        times = list(reader.time_values)
+        # time 0 holds the initial condition, not a solution
+        times = [t for t in reader.time_values if t > 0]
         if not times:
-            raise RuntimeError("no time directories")
+            raise RuntimeError("no solution time directories")
         if time_value is None:
             t = times[-1]
         else:
@@ -91,6 +94,16 @@ def align_and_scale(ref_mesh, gen_mesh):
     return aligned
 
 
+def cell_map(ref, gen):
+    """Index of the generated cell containing (or closest to) each reference cell centre."""
+    centres = ref.cell_centers().points
+    idx = np.asarray(gen.find_containing_cell(centres))
+    missing = idx < 0
+    if missing.any():
+        idx[missing] = np.asarray(gen.find_closest_cell(centres[missing]))
+    return idx
+
+
 def evaluate(gt_root, gen_root, fields):
     try:
         ref, t_ref = read_last(gt_root)
@@ -105,14 +118,7 @@ def evaluate(gt_root, gen_root, fields):
         try:
             ref_data = np.asarray(ref.cell_data[field], dtype=float)
             if ref.n_cells != gen.n_cells:
-                probe = ref.copy()
-                for key in (field,):
-                    if key in probe.point_data:
-                        del probe.point_data[key]
-                    if key in probe.cell_data:
-                        del probe.cell_data[key]
-                projected = probe.interpolate(gen, sharpness=0.1, n_points=50).point_data_to_cell_data()
-                gen_data = np.asarray(projected[field], dtype=float)
+                gen_data = np.asarray(gen.cell_data[field], dtype=float)[cell_map(ref, gen)]
             else:
                 gen_data = np.asarray(gen.cell_data[field], dtype=float)
             if ref_data.shape != gen_data.shape:
@@ -130,12 +136,13 @@ def main():
     ap.add_argument("--results", default=RESULTS_DIR)
     ap.add_argument("--fields", nargs="+", default=DEFAULT_FIELDS)
     ap.add_argument("--self-check", action="store_true",
-                    help="compare every reference case against itself (expected NMSE 0); validates the pipeline")
+                    help="compare every reference case against itself (expected NMSE 0); writes results/<split>_nmse_selfcheck.csv")
     args = ap.parse_args()
     ensure_dirs()
     os.makedirs(args.results, exist_ok=True)
-    for split, name in (("Basic", "basic_nmse_report.csv"), ("Advanced", "advanced_nmse_report.csv")):
-        out = os.path.join(args.results, name)
+    suffix = "_nmse_selfcheck.csv" if args.self_check else "_nmse_report.csv"
+    for split in ("Basic", "Advanced"):
+        out = os.path.join(args.results, split.lower() + suffix)
         n, scored = 0, 0
         with open(out, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f, lineterminator="\n")

@@ -37,11 +37,20 @@ ESI_BANNER = (
 SEPARATOR = "// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //\n"
 FOOTER = "// ************************************************************************* //\n"
 
-BANNER_RE = re.compile(r"\A\s*/\*-{10,}\*- C\+\+ -\*-{10,}\*\\\n.*?\n\\\*-{10,}\*/\n", re.S)
+# some LLM-written v10 files carry a malformed banner with doubled backslashes ('*\\\\' / '\\\\*')
+BANNER_RE = re.compile(r"\A\s*/\*-{10,}\*- C\+\+ -\*-{10,}\*\\{1,2}\n.*?\n\\{1,2}\*-{10,}\*/\n", re.S)
+
+
+COMMENTED_BANNER_LINE_RE = re.compile(r"^// (/\*-{10,}.*|\| ={5,}.*|\|\s*\\\\.*|\\{1,2}\*-{10,}\*/)\s*$")
 
 
 def replace_banner(text):
     """Replace a Foundation or old ESI banner by the v2412 banner, or prepend one."""
+    # a few files carry a second, commented-out copy of an old banner
+    lines = text.split("\n")
+    kept = [ln for ln in lines if not COMMENTED_BANNER_LINE_RE.match(ln)]
+    if len(kept) != len(lines):
+        text = "\n".join(kept)
     if BANNER_RE.match(text):
         return BANNER_RE.sub(lambda m: ESI_BANNER, text, count=1)
     return ESI_BANNER + text.lstrip("\n")
@@ -448,8 +457,8 @@ NUTILDA_FIXES = {
 # obliqueShock_KE / obliqueShock_LES prompts state "dynamic viscosity mu is 1.6646e-4" but the files had mu 0
 VISCOSITY_FIXES = {"obliqueShock_KE": "1.6646e-4", "obliqueShock_LES": "1.6646e-4"}
 # squareBend/2 (inlet T 1500 K) aborts in v2412 with a negative temperature after four SIMPLE
-# iterations when the enthalpy equation is relaxed with 0.9; 0.7 lets it run (the converged
-# solution of a steady SIMPLE run does not depend on the relaxation factor).
+# iterations when the enthalpy equation is relaxed with 0.9; with 0.7 it runs to endTime
+# (this variant does not meet the residualControl criteria within 500 iterations either way).
 ENTHALPY_RELAXATION_FIXES = {"squareBend/2": ("0.9", "0.7")}
 
 
@@ -589,8 +598,10 @@ def convert_case(key, files, log):
                 "#includeFunc patchAverage(patch=inlet, fields=(p U))",
                 "#includeFunc patchAverage(name=inlet,p,U)",
             )
-            # stray token left in one Advanced controlDict
-            text = re.sub(r"\nin\n", "\n", text)
+            # stray token 'in' left in the controlDict of five Advanced cases
+            text, n = re.subn(r"\nin\n", "\n", text)
+            if n:
+                log.append(f"{key}: removed stray token 'in' from system/controlDict")
         elif path == "system/fvSolution":
             text = rule_fv_solution(text)
             if is_bernard:
@@ -606,13 +617,16 @@ def convert_case(key, files, log):
                 if n:
                     log.append(f"{key}: enthalpy relaxation factor {old_f} -> {new_f} (negative T otherwise)")
             if is_two_phase and "cAlpha" not in text:
+                # ESI interFoam requires cAlpha. A case whose alpha scheme already compresses the
+                # interface (interfaceCompression) must not get the MULES compression on top.
+                c_alpha = "0" if "interfaceCompression" in files.get("system/fvSchemes", "") else "1"
                 text = re.sub(
                     r'((?:"alpha\.[^"]*"|alpha\.\w+)\s*\{\s*\n)',
-                    r"\g<1>        cAlpha          1;\n",
+                    r"\g<1>        cAlpha          " + c_alpha + ";\n",
                     text,
                     count=1,
                 )
-                log.append(f"{key}: added cAlpha 1 to the alpha solver dictionary (mandatory in ESI interFoam)")
+                log.append(f"{key}: added cAlpha {c_alpha} to the alpha solver dictionary (mandatory in ESI interFoam)")
         elif path == "system/fvSchemes":
             if is_bernard:
                 text = bernard_fv_schemes(text)

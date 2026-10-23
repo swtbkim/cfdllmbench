@@ -267,13 +267,6 @@ wallDist
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-// /*--------------------------------*- C++ -*----------------------------------*\\
-// | =========                 |                                                 |
-// | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-// |  \\    /   O peration     | Version:  v2012                                 |
-// |   \\  /    A nd           | Website:  www.openfoam.com                      |
-// |    \\/     M anipulation  |                                                 |
-// \\*---------------------------------------------------------------------------*/
 FoamFile
 {
     version     2.0;

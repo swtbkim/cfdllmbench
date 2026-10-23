@@ -110,16 +110,26 @@ def _descend_to_case(path):
 
 
 def application_of(case_root):
-    """Solver named by system/controlDict under ``case_root`` (searched one level deep)."""
+    """Solver named by ``application`` in the case's system/controlDict.
+
+    ``case_root/system/controlDict`` is used when present; otherwise the first
+    system/controlDict found walking the tree (sorted, shallowest first).
+    """
+    candidates = [os.path.join(case_root, "system", "controlDict")]
     for root, dirs, files in os.walk(case_root):
+        dirs.sort()
         if "controlDict" in files and os.path.basename(root) == "system":
-            try:
-                with open(os.path.join(root, "controlDict"), encoding="utf-8", errors="replace") as f:
-                    m = re.search(r"\n\s*application\s+(\w+)\s*;", f.read())
-                if m:
-                    return m.group(1)
-            except OSError:
-                pass
+            candidates.append(os.path.join(root, "controlDict"))
+    for path in candidates:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                m = re.search(r"\n\s*application\s+(\w+)\s*;", f.read())
+        except OSError:
+            continue
+        if m:
+            return m.group(1)
     return None
 
 

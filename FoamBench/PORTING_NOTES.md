@@ -63,6 +63,7 @@ below); after that change all 126 cases end with `End`.
 | `topoSet -dict topoSetDict.1`, `refineMesh -dict refineMeshDict` | `-dict system/topoSetDict.1`, `-dict system/refineMeshDict` | ESI resolves `-dict` relative to the case |
 | `refineMeshDict` directions `e1`, `e2` | `tan1`, `tan2` | |
 | `div(phi,alpha) Gauss MPLIC` | `Gauss vanLeer` + `div(phirb,alpha) Gauss linear` + `cAlpha 1` | v2412 has no MPLIC scheme; this is the ESI `damBreakWithObstacle` tutorial setup |
+| `div(phi,alpha) Gauss interfaceCompression vanLeer 1` (nozzleFlow2D_SA) | unchanged, plus `div(phirb,alpha) Gauss linear` and `cAlpha 0` | ESI reads both entries; `cAlpha 0` keeps the compression in the scheme only |
 | `0/U` `flowRateInletVelocity` with `profile turbulentBL` | `profile` entry removed | Foundation-only option; the prompt no longer mentions it |
 | `0/p_rgh` `prghTotalPressure` with `psi none; gamma 1;` | entries removed | ignored by ESI |
 | rhoCentralFoam `fvSolution` solver block `h` | renamed `e` | energy variable is `e`; block is unused when `mu = 0` |
@@ -87,8 +88,8 @@ they change what the benchmark compares against.
 | `Rectangular_Obstacle_SA` | `0/nuTilda` names the empty patch `defaultfaces` while the mesh patch is `defaultFaces` | spelling fixed |
 | `obliqueShock_KE`, `obliqueShock_LES` | prompt states `mu` = 1.6646e-4 (viscous, so the turbulence model acts) while the files had `mu 0` | `mu 1.6646e-4` |
 | `obliqueShock_KE` | `kEpsilonCoeffs` entry spelled `sigmaK` (ignored by both versions; the keyword is `sigmak`) | spelling fixed |
-| `squareBend/2` | with inlet T = 1500 K, rhoSimpleFoam v2412 aborts after four iterations with a negative temperature when `h` is relaxed with 0.9 | enthalpy relaxation factor 0.7 for this variant only (a steady SIMPLE solution does not depend on the relaxation factor; the other nine variants are unchanged) |
-| `Double_Square_SA` | stray token `in` in `system/controlDict` | removed |
+| `squareBend/2` | with inlet T = 1500 K, rhoSimpleFoam v2412 aborts after four iterations with a negative temperature when `h` is relaxed with 0.9 | enthalpy relaxation factor 0.7 for this variant only; it then runs to `endTime` 500 (this variant does not meet the `residualControl` criteria within 500 iterations, so its reference is the state at iteration 500); the other nine variants converge unchanged |
+| `Diamond_Obstacle_KOMEGASST`, `Diamond_Obstacle_SA`, `Rectangular_Obstacle_KOMEGASST`, `Rectangular_Obstacle_SA`, `Double_Square_SA` | stray token `in` in `system/controlDict` (swallowed the `purgeWrite` entry) | removed |
 | five Advanced cases | unused `system/blockMeshDict1` (a different geometry in millimetres) | removed |
 | `nozzleFlow2D_SA` | unused `0/data/ptrace`, `0/data/Ubulk` | removed |
 
@@ -128,7 +129,7 @@ regenerated with `run_gt_cases.py` on v2412 and never reused from v10:
 | `check_env.py` (new) | verifies the sourced OpenFOAM, the solvers the dataset needs and the Python modules |
 | `execution_report.py` | looks at the generated case itself (not only its sub-directories); prefers `log.<application>`; column renamed to `Execution` to match `score_calculation.py` (the two scripts disagreed before) |
 | `similarity_report.py` | every case gets a row (missing generated case = 0); column `CodeBLEU` renamed `RougeL` (it always was ROUGE-L) |
-| `nmse_report.py` | no longer leaves `.foam` marker files inside the reference cases; failures are caught; `--self-check` compares each reference with itself |
+| `nmse_report.py` | no longer leaves `.foam` marker files inside the reference cases; failures are caught; a generated case that never wrote a solution (only time 0) scores the sentinel instead of being compared at time 0; when the cell counts differ the generated field is sampled at the reference cell centres (the previous cell-to-point-to-cell interpolation gave NMSE 0.23 for an identical solution on a twice finer mesh); `--self-check` compares each reference with itself and writes separate `*_nmse_selfcheck.csv` files |
 | `score_calculation.py` | outer merge so that every case counts; writes `results/final_benchmark_scores.csv` and `results/per_case_scores.csv` |
 | `run_benchmarks.py` | takes `WM_PROJECT_DIR` from the environment instead of overwriting it; one-time MetaOpenFOAM database build; output in `<case>/generated` |
 | `foambench_common.py` (new) | shared case discovery and log checks; a generated directory that wraps a single case directory (MetaOpenFOAM's `run/<caseName>/` layout) is descended into |

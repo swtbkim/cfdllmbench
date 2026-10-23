@@ -385,13 +385,6 @@ boundaryField
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version: 10                                      |
-|   \\  /    A nd           | Web:      https://openfoam.org                  |
-|    \\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
 FoamFile
 {
     version     2.0;
@@ -446,13 +439,6 @@ boundaryField
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version: 10                                      |
-|   \\  /    A nd           | Web:      https://openfoam.org                  |
-|    \\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
 FoamFile
 {
     version     2.0;
@@ -563,13 +549,6 @@ boundaryField
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version: 10                                      |
-|   \\  /    A nd           | Web:      https://openfoam.org                  |
-|    \\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
 FoamFile
 {
     version     2.0;
@@ -680,13 +659,6 @@ boundaryField
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version: 10                                      |
-|   \\  /    A nd           | Web:      https://openfoam.org                  |
-|    \\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
 FoamFile
 {
     version     2.0;

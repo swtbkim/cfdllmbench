@@ -84,7 +84,7 @@ solvers
 {
     alpha.fuel
     {
-        cAlpha          1;
+        cAlpha          0;
         nAlphaCorr      1;
         nAlphaSubCycles 4;
     }
@@ -728,12 +728,6 @@ boundaryField
 |   \\  /    A nd           | Website:  www.openfoam.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
-/*--------------------------------*- C++ -*----------------------------------*\\
-| =========                 |                                                 |
-| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Website:  https://openfoam.org                  |
-|    \\/     M anipulation  |                                                 |
-\\*---------------------------------------------------------------------------*/
 FoamFile
 {
     version     2.0;
