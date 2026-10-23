@@ -76,6 +76,9 @@ they change what the benchmark compares against.
 | `Cylinder_SA` | prompt prescribes nuTilda = 0.03 in the domain/inlet, 0 on walls; GT had 0 everywhere | `0/nuTilda` set to the prompt values |
 | `nozzleFlow2D_SA` | prompt prescribes nuTilda = 1.7856e-05 in the domain/inlet, 0 on walls; GT had 0 and `zeroGradient` walls | `0/nuTilda` set to the prompt values |
 | `Diamond_Obstacle_SA`, `Rectangular_Obstacle_SA`, `Double_Square_SA` | `0/nuTilda` used `nutkWallFunction` (a nut wall function) on the walls | standard SA wall condition `fixedValue 0` |
+| `Rectangular_Obstacle_SA` | `0/nuTilda` names the empty patch `defaultfaces` while the mesh patch is `defaultFaces` | spelling fixed |
+| `obliqueShock_KE`, `obliqueShock_LES` | prompt states `mu` = 1.6646e-4 (viscous, so the turbulence model acts) while the files had `mu 0` | `mu 1.6646e-4` |
+| `obliqueShock_KE` | `kEpsilonCoeffs` entry spelled `sigmaK` (ignored by both versions; the keyword is `sigmak`) | spelling fixed |
 | `Double_Square_SA` | stray token `in` in `system/controlDict` | removed |
 | five Advanced cases | unused `system/blockMeshDict1` (a different geometry in millimetres) | removed |
 | `nozzleFlow2D_SA` | unused `0/data/ptrace`, `0/data/Ubulk` | removed |

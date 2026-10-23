@@ -450,7 +450,7 @@ boundaryField
         type            fixedValue;
         value           uniform 0;
     }
-    defaultfaces
+    defaultFaces
     {
         type            empty;
     }

@@ -765,7 +765,7 @@ RAS
         C1          1.44;
         C2          1.92;
         sigmaEps    1.3;
-        sigmaK      1.0;
+        sigmak      1.0;
     }
 }
 
@@ -817,7 +817,7 @@ mixture
     }
     transport
     {
-        mu              0;
+        mu              1.6646e-4;
         Pr              1;
     }
 }

@@ -735,7 +735,7 @@ mixture
     }
     transport
     {
-        mu              0;
+        mu              1.6646e-4;
         Pr              1;
     }
 }

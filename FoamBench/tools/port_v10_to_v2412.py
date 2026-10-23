@@ -438,6 +438,11 @@ NUTILDA_FIXES = {
 }
 
 
+# Other reference-file corrections (each aligned with the case's own prompt or with the mesh)
+# obliqueShock_KE / obliqueShock_LES prompts state "dynamic viscosity mu is 1.6646e-4" but the files had mu 0
+VISCOSITY_FIXES = {"obliqueShock_KE": "1.6646e-4", "obliqueShock_LES": "1.6646e-4"}
+
+
 def fix_nutilda(text, internal, patches):
     if internal is not None:
         text = re.sub(r"(\n\s*internalField\s+uniform\s+)[^;]+;", r"\g<1>" + internal + ";", text, count=1)
@@ -533,6 +538,9 @@ def convert_case(key, files, log):
         if path == "constant/momentumTransport":
             new_path = "constant/turbulenceProperties"
             text = rule_turbulence_properties(text)
+            if "sigmaK" in text:
+                text = text.replace("sigmaK", "sigmak")  # the coefficient is spelled sigmak; sigmaK was ignored
+                log.append(f"{key}: kEpsilonCoeffs sigmaK -> sigmak")
         elif path == "constant/physicalProperties":
             if is_bernard:
                 new_path = "constant/transportProperties"
@@ -544,6 +552,9 @@ def convert_case(key, files, log):
             elif "thermoType" in text:
                 new_path = "constant/thermophysicalProperties"
                 text = rule_thermophysical_properties(text)
+                if key in VISCOSITY_FIXES:
+                    text = re.sub(r"(\n\s*mu\s+)0\s*;", r"\g<1>" + VISCOSITY_FIXES[key] + ";", text, count=1)
+                    log.append(f"{key}: mu 0 -> {VISCOSITY_FIXES[key]} as the prompt states")
             else:
                 new_path = "constant/transportProperties"
                 text = rule_transport_properties(text)
@@ -619,6 +630,8 @@ def convert_case(key, files, log):
         elif path == "0/nuTilda" and key in NUTILDA_FIXES:
             internal, patches = NUTILDA_FIXES[key]
             text = fix_nutilda(text, internal, patches)
+            if "\n    defaultfaces\n" in text:
+                text = text.replace("\n    defaultfaces\n", "\n    defaultFaces\n")  # mesh patch is defaultFaces
             log.append(f"{key}: 0/nuTilda aligned with the prompt / standard SA wall condition")
         elif is_bernard and path in ("0/p",):
             text = kinematic_pressure(text)
