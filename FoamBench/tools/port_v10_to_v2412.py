@@ -441,6 +441,10 @@ NUTILDA_FIXES = {
 # Other reference-file corrections (each aligned with the case's own prompt or with the mesh)
 # obliqueShock_KE / obliqueShock_LES prompts state "dynamic viscosity mu is 1.6646e-4" but the files had mu 0
 VISCOSITY_FIXES = {"obliqueShock_KE": "1.6646e-4", "obliqueShock_LES": "1.6646e-4"}
+# squareBend/2 (inlet T 1500 K) aborts in v2412 with a negative temperature after four SIMPLE
+# iterations when the enthalpy equation is relaxed with 0.9; 0.7 lets it run (the converged
+# solution of a steady SIMPLE run does not depend on the relaxation factor).
+ENTHALPY_RELAXATION_FIXES = {"squareBend/2": ("0.9", "0.7")}
 
 
 def fix_nutilda(text, internal, patches):
@@ -589,6 +593,11 @@ def convert_case(key, files, log):
                 log.append(f"{key}: fvConstraints limitPressure -> SIMPLE pMinFactor/pMaxFactor")
             if is_rho_central:
                 text = rhocentral_fv_solution(text)
+            if key in ENTHALPY_RELAXATION_FIXES:
+                old_f, new_f = ENTHALPY_RELAXATION_FIXES[key]
+                text, n = re.subn(r"(\n\s*h\s+)" + re.escape(old_f) + r"\s*;", r"\g<1>" + new_f + ";", text, count=1)
+                if n:
+                    log.append(f"{key}: enthalpy relaxation factor {old_f} -> {new_f} (negative T otherwise)")
             if is_two_phase and "cAlpha" not in text:
                 text = re.sub(
                     r'((?:"alpha\.[^"]*"|alpha\.\w+)\s*\{\s*\n)',

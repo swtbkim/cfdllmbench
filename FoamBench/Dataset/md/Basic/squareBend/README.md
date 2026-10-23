@@ -11,7 +11,7 @@ Solver `rhoSimpleFoam`, turbulence RAS kEpsilon.
 | Variant | Prompt change vs 1 | Files that differ from variant 1 |
 |---|---|---|
 | [1](1.md) | baseline | - |
-| [2](2.md) | `1000.` -> `1500.` | `0/T` |
+| [2](2.md) | `1000.` -> `1500.` | `0/T`, `system/fvSolution` |
 | [3](3.md) | `0.71.` -> `1.0.` | `constant/thermophysicalProperties` |
 | [4](4.md) | `1.82e-5.` -> `2.5e-5.` | `constant/thermophysicalProperties` |
 | [5](5.md) | `0.71.` -> `1.0.`; `1.82e-5.` -> `2.5e-5.` | `constant/thermophysicalProperties` |

@@ -48,6 +48,7 @@
  "squareBend/2: constant/physicalProperties -> constant/thermophysicalProperties",
  "squareBend/2: removed 'profile turbulentBL' (Foundation-only flowRateInletVelocity option)",
  "squareBend/2: fvConstraints limitPressure -> SIMPLE pMinFactor/pMaxFactor",
+ "squareBend/2: enthalpy relaxation factor 0.9 -> 0.7 (negative T otherwise)",
  "squareBend/2: deleted system/fvConstraints",
  "squareBend/4: prompt ' with turbulentBL profile' -> ''",
  "squareBend/4: constant/momentumTransport -> constant/turbulenceProperties",
