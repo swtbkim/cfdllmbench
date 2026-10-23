@@ -100,7 +100,7 @@ ESI):
 |---|---|---|
 | BernardCells | `buoyantFoam` | `buoyantBoussinesqPimpleFoam` |
 | Cavity | `model kEpsilon` | `RASModel kEpsilon` |
-| Cylinder | `use constant viscosity model with nu value of ... in physical properties` | `use a Newtonian transport model with nu value of ... in transportProperties` |
+| Cylinder (also Advanced `Cylinder_SA`, `Cylinder_LES`) | `use constant viscosity model with nu value of ... in physical properties` | `use a Newtonian transport model with nu value of ... in transportProperties` |
 | squareBend | `with turbulentBL profile` | removed |
 
 ## Things that differ numerically between the two versions
@@ -111,8 +111,9 @@ regenerated with `run_gt_cases.py` on v2412 and never reused from v10:
 
 - interFoam: geometric MPLIC advection replaced by vanLeer with interface
   compression, and ESI's own adaptive-refinement implementation.
-- Spalart-Allmaras: ESI includes the `ft2` term and a `k()` estimate that
-  feeds `nutkWallFunction`.
+- Spalart-Allmaras: ESI provides a `k()` estimate that feeds
+  `nutkWallFunction` (v10 returns zero there); ESI also offers an optional
+  `ft2` term, which is off by default and not enabled in any reference case.
 - reactingFoam: `reactingMixture` mixes transport properties linearly instead
   of Wilke's rule; the `EulerImplicit` chemistry solvers are different
   implementations.
@@ -128,7 +129,7 @@ regenerated with `run_gt_cases.py` on v2412 and never reused from v10:
 | `run_gt_cases.py` (new) | runs every reference case in parallel (each `Allrun` in its own process group so a timeout also stops the solver), writes `results/gt_run_<version>.csv` and `logs/` |
 | `check_env.py` (new) | verifies the sourced OpenFOAM, the solvers the dataset needs and the Python modules |
 | `execution_report.py` | looks at the generated case itself (not only its sub-directories); prefers `log.<application>`; column renamed to `Execution` to match `score_calculation.py` (the two scripts disagreed before) |
-| `similarity_report.py` | every case gets a row (missing generated case = 0); column `CodeBLEU` renamed `RougeL` (it always was ROUGE-L) |
+| `similarity_report.py` | every case gets a row (missing generated case = 0); column `CodeBLEU` renamed `RougeL` (it always was ROUGE-L); by default the reference files are read from `GT_Files` on disk, i.e. after `run_gt_cases.py` (setFields / subsetMesh / refineMesh rewrite `0/` fields in place, as they do in the framework's case, which is how the original benchmark scored); `--pristine` compares against the untouched JSON content instead |
 | `nmse_report.py` | no longer leaves `.foam` marker files inside the reference cases; failures are caught; a generated case that never wrote a solution (only time 0) scores the sentinel instead of being compared at time 0; when the cell counts differ the generated field is sampled at the reference cell centres (the previous cell-to-point-to-cell interpolation gave NMSE 0.23 for an identical solution on a twice finer mesh); `--self-check` compares each reference with itself and writes separate `*_nmse_selfcheck.csv` files |
 | `score_calculation.py` | outer merge so that every case counts; writes `results/final_benchmark_scores.csv` and `results/per_case_scores.csv` |
 | `run_benchmarks.py` | takes `WM_PROJECT_DIR` from the environment instead of overwriting it; one-time MetaOpenFOAM database build; output in `<case>/generated` |

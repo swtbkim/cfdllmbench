@@ -33,7 +33,7 @@ port.
 | pitzDaily | pimpleFoam (k-epsilon) | inlet velocity, viscosity |
 | shallowWaterWithSquareBump | shallowWaterFoam | water depth |
 | squareBend | rhoSimpleFoam (k-epsilon) | inlet temperature, viscosity, Prandtl number, time step |
-| wedge | rhoCentralFoam | inlet velocity, temperature, Prandtl number |
+| wedge | rhoCentralFoam | inlet velocity, temperature, Prandtl number, time step |
 
 Each case in `Dataset/FoamBench_basic.json` / `Dataset/FoamBench_advanced.json`
 is a dictionary `{"usr_requirement": <prompt>, "Allrun": ..., "0/U": ...,
@@ -143,7 +143,7 @@ All commands run from this directory with the OpenFOAM environment sourced.
 |---|---|
 | `M_exec` | 1 if the solver log of the generated case (`log.<application>` from its `controlDict`, or any `log.*Foam`) ends with `End` |
 | `M_struct` | share of reference files (under `0/`, `constant/`, `system/`) that exist at the same relative path in the generated case, averaged over the three directories |
-| `M_file` | mean ROUGE-L F-measure between reference and generated file text (comments and banner removed); a missing file counts 0 |
+| `M_file` | mean ROUGE-L F-measure between reference and generated file text (comments and banner removed); a missing file counts 0. The reference files are `GT_Files` as left by `run_gt_cases.py` (fields rewritten by setFields / subsetMesh on both sides, as in the original benchmark); `similarity_report.py --pristine` uses the untouched JSON content instead |
 | `M_NMSE` | NMSE of the fields `U`, `p`, `rho`, `T` (those present in both) at the last reference time, mean over fields; 1 if NMSE < 0.1, 0.5 if NMSE < 0.3, else 0. If the cell counts differ, the generated field is sampled at the reference cell centres; a case that wrote no solution scores 0 |
 | Success Ratio | share of cases with `M_exec` = 1 and `M_NMSE` = 1 |
 
