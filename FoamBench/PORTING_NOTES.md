@@ -23,8 +23,10 @@ in ESI v2012 format ran; everything else failed at start-up (missing
 `transportProperties` / `thermophysicalProperties`, `buoyantFoam` not found,
 `dynamicMeshDict` format, `#includeFunc` arguments, `refineMesh -dict` path).
 Then every one of the 126 ported cases was run to completion with
-`run_gt_cases.py`; the per-case outcome and run time are in
-`results/gt_run_v2412.csv`.
+`run_gt_cases.py` (about 1.2 CPU-hours in total); the per-case outcome and
+run time are in `results/gt_run_v2412.csv`. The only case that failed on the
+first pass was `squareBend/2` (negative temperature, see the corrections
+below); after that change all 126 cases end with `End`.
 
 ## Mapping rules applied to every case
 

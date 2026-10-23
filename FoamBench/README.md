@@ -98,7 +98,7 @@ FoamBench/
 All commands run from this directory with the OpenFOAM environment sourced.
 
 1. Unpack the datasets and run the reference cases once (the NMSE metric needs
-   reference results; this takes a few hours on four cores):
+   reference results; about 1.2 CPU-hours in total, roughly 30 minutes on four cores):
 
    ```bash
    python3 read_json.py

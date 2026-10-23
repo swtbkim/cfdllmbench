@@ -96,4 +96,4 @@ for the full description.
   openfoam.com repository); works on WSL2 when the repository is kept on the
   Linux filesystem
 - Python 3.9+ with numpy, pandas, pyvista, rouge-score, PyYAML
-- A few hours of CPU time to run the 126 reference cases once
+- About 1.2 CPU-hours (30 minutes on four cores) to run the 126 reference cases once
