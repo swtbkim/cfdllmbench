@@ -28,7 +28,7 @@ def analyze(dataset_dir, split):
 
 def write_csv(path, rows):
     with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         w.writerow(["Dataset", "Directory", "Execution"])
         w.writerows(rows)
 

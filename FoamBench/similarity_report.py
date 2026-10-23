@@ -111,7 +111,7 @@ def main():
         out = os.path.join(args.results, name)
         n = 0
         with open(out, "w", newline="", encoding="utf-8") as f:
-            w = csv.writer(f)
+            w = csv.writer(f, lineterminator="\n")
             w.writerow(["Dataset", "Directory", "RougeL", "TreeScore"])
             for _, dataset, directory, case_dir in iter_cases(args.dataset, (split,)):
                 file_score, tree_score = score_case(case_dir)

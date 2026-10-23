@@ -125,7 +125,7 @@ def main():
     rows.sort(key=lambda r: (r[0], r[1], r[2]))
     out = args.out or os.path.join(RESULTS_DIR, f"gt_run_{version}.csv")
     with open(out, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, lineterminator="\n")
         w.writerow(["Split", "Dataset", "Directory", "Success", "Seconds", "Application", "Error"])
         w.writerows(rows)
     ok = sum(r[3] for r in rows)
