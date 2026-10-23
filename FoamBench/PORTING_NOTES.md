@@ -124,14 +124,14 @@ regenerated with `run_gt_cases.py` on v2412 and never reused from v10:
 | Script | Change |
 |---|---|
 | `read_json.py` (+ thin `read_json_basic.py` / `read_json_advanced.py` wrappers) | one script for both splits; no API key or personal path in the repository; `Allrun` made executable; MetaOpenFOAM YAML only with `--metaopenfoam-yaml` |
-| `run_gt_cases.py` (new) | runs every reference case in parallel, writes `results/gt_run_<version>.csv` and `logs/` |
+| `run_gt_cases.py` (new) | runs every reference case in parallel (each `Allrun` in its own process group so a timeout also stops the solver), writes `results/gt_run_<version>.csv` and `logs/` |
 | `check_env.py` (new) | verifies the sourced OpenFOAM, the solvers the dataset needs and the Python modules |
 | `execution_report.py` | looks at the generated case itself (not only its sub-directories); prefers `log.<application>`; column renamed to `Execution` to match `score_calculation.py` (the two scripts disagreed before) |
 | `similarity_report.py` | every case gets a row (missing generated case = 0); column `CodeBLEU` renamed `RougeL` (it always was ROUGE-L) |
 | `nmse_report.py` | no longer leaves `.foam` marker files inside the reference cases; failures are caught; `--self-check` compares each reference with itself |
 | `score_calculation.py` | outer merge so that every case counts; writes `results/final_benchmark_scores.csv` and `results/per_case_scores.csv` |
 | `run_benchmarks.py` | takes `WM_PROJECT_DIR` from the environment instead of overwriting it; one-time MetaOpenFOAM database build; output in `<case>/generated` |
-| `foambench_common.py` (new) | shared case discovery and log checks |
+| `foambench_common.py` (new) | shared case discovery and log checks; a generated directory that wraps a single case directory (MetaOpenFOAM's `run/<caseName>/` layout) is descended into |
 | `Dockerfile` | `opencfd/openfoam-default:2412` base image |
 | `.gitattributes` | LF line endings for every text file so a Windows clone still runs under WSL2 |
 
