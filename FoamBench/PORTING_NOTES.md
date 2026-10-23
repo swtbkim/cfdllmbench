@@ -79,6 +79,7 @@ they change what the benchmark compares against.
 | `Rectangular_Obstacle_SA` | `0/nuTilda` names the empty patch `defaultfaces` while the mesh patch is `defaultFaces` | spelling fixed |
 | `obliqueShock_KE`, `obliqueShock_LES` | prompt states `mu` = 1.6646e-4 (viscous, so the turbulence model acts) while the files had `mu 0` | `mu 1.6646e-4` |
 | `obliqueShock_KE` | `kEpsilonCoeffs` entry spelled `sigmaK` (ignored by both versions; the keyword is `sigmak`) | spelling fixed |
+| `squareBend/2` | with inlet T = 1500 K, rhoSimpleFoam v2412 aborts after four iterations with a negative temperature when `h` is relaxed with 0.9 | enthalpy relaxation factor 0.7 for this variant only (a steady SIMPLE solution does not depend on the relaxation factor; the other nine variants are unchanged) |
 | `Double_Square_SA` | stray token `in` in `system/controlDict` | removed |
 | five Advanced cases | unused `system/blockMeshDict1` (a different geometry in millimetres) | removed |
 | `nozzleFlow2D_SA` | unused `0/data/ptrace`, `0/data/Ubulk` | removed |
